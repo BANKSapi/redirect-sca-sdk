@@ -1,5 +1,5 @@
 # Redirect SCA SDK
-This is a small SDK helping a TPP to implement BANKSapi's Redirect Component in their on domain to
+This is a small SDK helping TPPs to implement BANKSapi's Redirect Component on their domain to
 be compliant with the regulatory requirements of XS2A's redirect SCA flow.
 
 ## Build
