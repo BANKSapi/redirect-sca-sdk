@@ -1,3 +1,5 @@
+const QUERY_PARAM_REDIRECT_SCA_ERROR = 'redirect-sca-error';
+
 const initState = function (baseUrl) {
     const urlParams = new URLSearchParams(window.location.search);
 
@@ -6,14 +8,21 @@ const initState = function (baseUrl) {
     const session = urlParams.get('session');
     const consent = urlParams.get('consent');
 
-    const sessionStorageFilled = sessionStorage.getItem('sca:callbackUrl') &&
-        sessionStorage.getItem('sca:userToken') &&
-        sessionStorage.getItem('sca:consent') &&
-        sessionStorage.getItem('sca:correlationId');
+    const queryParamsFilled = callbackUrl && forwardUrl && session && consent;
+    if (queryParamsFilled) {
+        sessionStorage.clear();
+    }
 
+    if (isSessionStorageFilled()) {
+        clearStateIfTooOld();
+    }
+
+    const sessionStorageFilled = isSessionStorageFilled();
     return new Promise((resolve, reject) => {
         if (!baseUrl) {
             reject(new Error('missing base url'));
+        } else if (!sessionStorageFilled && !queryParamsFilled) {
+            reject(new Error('state could not be initialized'))
         } else if (!sessionStorageFilled) {
             if (!callbackUrl) {
                 reject(new Error('missing callbackUrl parameter'));
@@ -36,15 +45,21 @@ const initState = function (baseUrl) {
 }
 
 function continueToProvider(baseUrl, state) {
-    if (!state || 
-        !state.session || 
+    if (!state ||
+        !state.session ||
         !state.callbackUrl ||
         !state.consent) {
         return Promise.reject(new Error('state not initialized'));
     }
 
     // get_session -> confirm_redirect -> redirect to provider
-    window.fetch(`${baseUrl}/redirect-sca/sessions/${state.session}`)
+    return fetch(`${baseUrl}/redirect-sca/sessions/${state.session}`)
+        .then(response => {
+            if (response.status >= 400) {
+                throw new Error(`HTTP ${response.status} can not be handled`);
+            }
+            return Promise.resolve(response);
+        })
         .then(response => response.json())
         .then(response => {
             const userToken = response.userToken;
@@ -70,6 +85,7 @@ function continueToProvider(baseUrl, state) {
             sessionStorage.setItem('sca:userToken', userToken);
             sessionStorage.setItem('sca:consent', state.consent);
             sessionStorage.setItem('sca:correlationId', correlationId);
+            sessionStorage.setItem('sca:time', new Date().toISOString);
 
             let isTransfer = !!(!account && transfer);
             confirmRedirect(baseUrl, userToken, isTransfer, state.consent, correlationId)
@@ -86,6 +102,13 @@ function continueToCustomer(baseUrl) {
     let transfer = sessionStorage.getItem('sca:transfer');
     let consent = sessionStorage.getItem('sca:consent');
     let correlationId = sessionStorage.getItem('sca:correlationId');
+
+    let errorValue = evaluateUrlForErrors(window.location.href);
+    if (errorValue) {
+        let url = new URL(callbackUrl);
+        url.searchParams.set(QUERY_PARAM_REDIRECT_SCA_ERROR, errorValue);
+        callbackUrl = url.toString();
+    }
 
     let isTransfer = !!(!account && transfer);
     authenticate(baseUrl, userToken, isTransfer, consent, correlationId)
@@ -110,6 +133,11 @@ function confirmRedirect(baseUrl, userToken, isTransfer, consent, correlationId)
             'x-correlation-id': correlationId
         },
         body: null,
+    }).then(response => {
+        if (response.status >= 400) {
+            throw new Error(`HTTP ${response.status} can not be handled`);
+        }
+        return Promise.resolve(response);
     });
 }
 
@@ -134,7 +162,66 @@ function authenticate(baseUrl, userToken, isTransfer, consent, correlationId) {
             JSON.stringify({
                 'scaAuthenticationData': payload
             }) : JSON.stringify({}),
+    }).then(response => {
+        if (response.status >= 400) {
+            throw new Error(`HTTP ${response.status} can not be handled`);
+        }
+        return Promise.resolve(response);
     });
+}
+
+function abortSca() {
+    if (isSessionStorageFilled()) {
+        let callbackUrl = sessionStorage.getItem('sca:callbackUrl');
+        let userToken = sessionStorage.getItem('sca:userToken');
+        let account = sessionStorage.getItem('sca:account');
+        let transfer = sessionStorage.getItem('sca:transfer');
+        let consent = sessionStorage.getItem('sca:consent');
+        let correlationId = sessionStorage.getItem('sca:correlationId');
+
+        let isTransfer = !!(!account && transfer);
+        authenticate(baseUrl, userToken, isTransfer, consent, correlationId)
+            .finally(() => {
+                sessionStorage.clear();
+                let url = new URL(callbackUrl);
+                url.searchParams.set(QUERY_PARAM_REDIRECT_SCA_ERROR, 'user abort');
+                window.location.replace(url);
+            });
+    } else {
+        return Promise.reject(new Error('callback not found'));
+    }
+}
+
+function isSessionStorageFilled() {
+    return sessionStorage.getItem('sca:callbackUrl') &&
+        sessionStorage.getItem('sca:userToken') &&
+        sessionStorage.getItem('sca:consent') &&
+        sessionStorage.getItem('sca:correlationId') &&
+        sessionStorage.getItem('sca:time') &&
+        (sessionStorage.getItem('sca:account') || sessionStorage.getItem('sca:transfer'));
+}
+
+function evaluateUrlForErrors(urlString) {
+    let url = new URL(urlString);
+    let errorValue;
+    if (url.searchParams.has('error_uri')) {
+        errorValue = 'Fehler bei Kundenauthentifizierung';
+    } else if (url.searchParams.has('error')) {
+        errorValue = url.searchParams.get('error');
+    } else if (url.searchParams.has('error_description')) {
+        errorValue = url.searchParams.get('error_description');
+    }
+    return errorValue;
+}
+
+function clearStateIfTooOld() {
+    let startTime = new Date(sessionStorage.getItem('sca:time'));
+    let endTime = new Date();
+    let difference = Math.abs(endTime.getTime() - startTime.getTime());
+    let minutes = Math.round(difference / 60000);
+    if (minutes > 15) {
+        sessionStorage.clear();
+    }
 }
 
 module.exports = {
@@ -142,5 +229,6 @@ module.exports = {
     continueToProvider,
     continueToCustomer,
     confirmRedirect,
-    authenticate
-}
+    authenticate,
+    abortSca
+};

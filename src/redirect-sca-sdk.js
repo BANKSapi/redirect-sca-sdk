@@ -37,22 +37,32 @@ function returnNextRedirect () {
 
 /**
  * Continues with the redirect by modifying the value of window.location
- * 
- * @returns {Promise} resolved promise
  */
 function continueRedirect () {
-    returnNextRedirect().then(continueTo => {
+    return returnNextRedirect().then(continueTo => {
         switch (continueTo) {
             case 'PROVIDER':
                 return helper.continueToProvider(redirectSca.baseUrl, redirectSca.state);
             case 'CUSTOMER':
                 return helper.continueToCustomer(redirectSca.baseUrl);
         }
-    })
+    });
+}
+
+/**
+ * Aborts the redirect SCA process. If possible the authentication will be aborted and
+ * the user is being redirected to the tenant with an 'redirect-sca-error' query parameter.
+ * Otherwise the promise will be rejected.
+ *
+ * @returns {Promise} rejected if no callback could be performed
+ */
+ function abortSca () {
+    return helper.abortSca();
 }
 
 module.exports = {
     initState: initState,
     returnNextRedirect: returnNextRedirect,
-    continueRedirect: continueRedirect
+    continueRedirect: continueRedirect,
+    abortSca: abortSca
 };

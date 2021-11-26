@@ -12,12 +12,16 @@ or
 `npm run build` to build a bundled version to `dist/`.
 
 ## Usage
-The SDK (in this case more of a library) provides you with 3 methods.
+The SDK (in this case more of a library) provides you with these methods.
 * `redirectSca.initState(baseUrl)`
 * `redirectSca.returnNextRedirect()`
 * `redirectSca.continueRedirect()`
+* `redirectSca.abortSca()`
 
-you can learn more about them by looking into the documentation inside of `src/redirect-sca-sdk.js`
+This SDK tries to propagate errors from the banking provider.
+Errors show up to the TPP in form of the query parameter `redirect-sca-error` appended to the callback URL.
+
+You can learn more about them by looking into the documentation inside of `src/redirect-sca-sdk.js`
 
 Example usage after embedding the SDK from `dist/` in a `<script>`-tag:
 ```js
