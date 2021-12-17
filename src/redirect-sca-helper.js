@@ -85,12 +85,13 @@ function continueToProvider(baseUrl, state) {
             sessionStorage.setItem('sca:userToken', userToken);
             sessionStorage.setItem('sca:consent', state.consent);
             sessionStorage.setItem('sca:correlationId', correlationId);
-            sessionStorage.setItem('sca:time', new Date().toISOString);
+            sessionStorage.setItem('sca:time', new Date().toISOString());
 
             let isTransfer = !!(!account && transfer);
-            confirmRedirect(baseUrl, userToken, isTransfer, state.consent, correlationId)
+            return confirmRedirect(baseUrl, userToken, isTransfer, state.consent, correlationId)
                 .then(() => {
                     window.location.replace(state.forwardUrl);
+                    return state.forwardUrl;
                 });
         });
 }
@@ -111,14 +112,16 @@ function continueToCustomer(baseUrl) {
     }
 
     let isTransfer = !!(!account && transfer);
-    authenticate(baseUrl, userToken, isTransfer, consent, correlationId)
+    return authenticate(baseUrl, userToken, isTransfer, consent, correlationId)
         .then(() => {
             sessionStorage.clear();
             window.location.replace(callbackUrl);
+            return callbackUrl;
         });
 }
 
 function confirmRedirect(baseUrl, userToken, isTransfer, consent, correlationId) {
+    let url;
     if (isTransfer) {
         url = `${baseUrl}/redirect-sca/ueberweisung/${consent}/consent/redirect`;
     } else {
@@ -193,12 +196,12 @@ function abortSca() {
 }
 
 function isSessionStorageFilled() {
-    return sessionStorage.getItem('sca:callbackUrl') &&
+    return !!(sessionStorage.getItem('sca:callbackUrl') &&
         sessionStorage.getItem('sca:userToken') &&
         sessionStorage.getItem('sca:consent') &&
         sessionStorage.getItem('sca:correlationId') &&
         sessionStorage.getItem('sca:time') &&
-        (sessionStorage.getItem('sca:account') || sessionStorage.getItem('sca:transfer'));
+        (sessionStorage.getItem('sca:account') || sessionStorage.getItem('sca:transfer')));
 }
 
 function evaluateUrlForErrors(urlString) {
