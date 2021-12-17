@@ -23,7 +23,7 @@ Errors show up to the TPP in form of the query parameter `redirect-sca-error` ap
 
 You can learn more about them by looking into the documentation inside of `src/redirect-sca-sdk.js`
 
-Example usage after embedding the SDK from `dist/` in a `<script>`-tag:
+Minimal example usage after embedding the SDK from `dist/` in a `<script>`-tag:
 ```js
 const baseUrl = 'https://test.banksapi.io';
 await redirectSca.initState(baseUrl);
@@ -31,3 +31,4 @@ let nextRedirectDirection = await redirectSca.returnNextRedirect(); // CUSTOMER 
 console.log(nextRedirectDirection);
 redirectSca.continueRedirect();
 ```
+Sample implementation can be found at [https://banksapi.io/redirect/](https://banksapi.io/redirect/)
