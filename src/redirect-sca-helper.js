@@ -96,28 +96,33 @@ function continueToProvider(baseUrl, state) {
         });
 }
 
-function continueToCustomer(baseUrl) {
+function continueToCustomer(baseUrl, redirectFn = defaultRedirectToCustomerFn) {
     let callbackUrl = sessionStorage.getItem('sca:callbackUrl');
     let userToken = sessionStorage.getItem('sca:userToken');
     let account = sessionStorage.getItem('sca:account');
     let transfer = sessionStorage.getItem('sca:transfer');
     let consent = sessionStorage.getItem('sca:consent');
     let correlationId = sessionStorage.getItem('sca:correlationId');
-
-    let errorValue = evaluateUrlForErrors(window.location.href);
-    if (errorValue) {
-        let url = new URL(callbackUrl);
-        url.searchParams.set(QUERY_PARAM_REDIRECT_SCA_ERROR, errorValue);
-        callbackUrl = url.toString();
-    }
-
+    
+    let redirectScaError = evaluateUrlForErrors(window.location.href);
     let isTransfer = !!(!account && transfer);
+
     return authenticate(baseUrl, userToken, isTransfer, consent, correlationId)
         .then(() => {
             sessionStorage.clear();
-            window.location.replace(callbackUrl);
-            return callbackUrl;
+            return redirectFn(callbackUrl, { redirectScaError });
         });
+}
+
+function defaultRedirectToCustomerFn(callbackUrl, { redirectScaError }) {
+    if (redirectScaError) {
+        let url = new URL(callbackUrl);
+        url.searchParams.set(QUERY_PARAM_REDIRECT_SCA_ERROR, redirectScaError);
+        callbackUrl = url.toString();
+    }
+
+    window.location.replace(callbackUrl);
+    return callbackUrl;
 }
 
 function confirmRedirect(baseUrl, userToken, isTransfer, consent, correlationId) {
