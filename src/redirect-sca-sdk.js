@@ -33,7 +33,7 @@ function initState(baseUrl) {
     return helper.initState(baseUrl).then(state => {
         redirectSca.state = state;
         redirectSca.baseUrl = baseUrl;
-        return Promise.resolve(redirectSca.state);
+        return redirectSca.state;
     });
 }
 

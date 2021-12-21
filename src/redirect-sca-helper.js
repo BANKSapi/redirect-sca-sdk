@@ -1,6 +1,6 @@
 const QUERY_PARAM_REDIRECT_SCA_ERROR = 'redirect-sca-error';
 
-const initState = function (baseUrl) {
+function initState(baseUrl) {
     const urlParams = new URLSearchParams(window.location.search);
 
     const callbackUrl = urlParams.get('callbackUrl');
@@ -10,7 +10,7 @@ const initState = function (baseUrl) {
 
     const queryParamsFilled = callbackUrl && forwardUrl && session && consent;
     if (queryParamsFilled) {
-        sessionStorage.clear();
+        clearStorage();
     }
 
     if (isSessionStorageFilled()) {
@@ -22,7 +22,7 @@ const initState = function (baseUrl) {
         if (!baseUrl) {
             reject(new Error('missing base url'));
         } else if (!sessionStorageFilled && !queryParamsFilled) {
-            reject(new Error('state could not be initialized'))
+            reject(new Error('state could not be initialized'));
         } else if (!sessionStorageFilled) {
             if (!callbackUrl) {
                 reject(new Error('missing callbackUrl parameter'));
@@ -41,7 +41,7 @@ const initState = function (baseUrl) {
             consent: consent,
             sessionStorageFilled: sessionStorageFilled,
         });
-    })
+    });
 }
 
 function continueToProvider(baseUrl, state) {
@@ -58,7 +58,7 @@ function continueToProvider(baseUrl, state) {
             if (response.status >= 400) {
                 throw new Error(`HTTP ${response.status} can not be handled`);
             }
-            return Promise.resolve(response);
+            return response;
         })
         .then(response => response.json())
         .then(response => {
@@ -68,11 +68,11 @@ function continueToProvider(baseUrl, state) {
             const correlationId = response.correlationId;
 
             if (!userToken) {
-                return Promise.reject(new Error('could not determine userToken'));
+                throw new Error('could not determine userToken');
             }
 
             if (!account && !transfer) {
-                return Promise.reject(new Error('could not determine account or transfer'));
+                throw new Error('could not determine account or transfer');
             }
 
             if (account) {
@@ -103,13 +103,13 @@ function continueToCustomer(baseUrl, redirectFn = defaultRedirectToCustomerFn) {
     let transfer = sessionStorage.getItem('sca:transfer');
     let consent = sessionStorage.getItem('sca:consent');
     let correlationId = sessionStorage.getItem('sca:correlationId');
-    
+
     let redirectScaError = evaluateUrlForErrors(window.location.href);
     let isTransfer = !!(!account && transfer);
 
     return authenticate(baseUrl, userToken, isTransfer, consent, correlationId)
         .then(() => {
-            sessionStorage.clear();
+            clearStorage();
             return redirectFn(callbackUrl, { redirectScaError });
         });
 }
@@ -145,7 +145,7 @@ function confirmRedirect(baseUrl, userToken, isTransfer, consent, correlationId)
         if (response.status >= 400) {
             throw new Error(`HTTP ${response.status} can not be handled`);
         }
-        return Promise.resolve(response);
+        return response;
     });
 }
 
@@ -174,7 +174,7 @@ function authenticate(baseUrl, userToken, isTransfer, consent, correlationId) {
         if (response.status >= 400) {
             throw new Error(`HTTP ${response.status} can not be handled`);
         }
-        return Promise.resolve(response);
+        return response;
     });
 }
 
@@ -188,9 +188,9 @@ function abortSca() {
         let correlationId = sessionStorage.getItem('sca:correlationId');
 
         let isTransfer = !!(!account && transfer);
-        authenticate(baseUrl, userToken, isTransfer, consent, correlationId)
+        return authenticate(baseUrl, userToken, isTransfer, consent, correlationId)
             .finally(() => {
-                sessionStorage.clear();
+                clearStorage();
                 let url = new URL(callbackUrl);
                 url.searchParams.set(QUERY_PARAM_REDIRECT_SCA_ERROR, 'user abort');
                 window.location.replace(url);
@@ -228,8 +228,14 @@ function clearStateIfTooOld() {
     let difference = Math.abs(endTime.getTime() - startTime.getTime());
     let minutes = Math.round(difference / 60000);
     if (minutes > 15) {
-        sessionStorage.clear();
+        clearStorage();
     }
+}
+
+function clearStorage() {
+    Object.keys(sessionStorage)
+        .filter(key => key.startsWith('sca:'))
+        .forEach(key => sessionStorage.removeItem(key));
 }
 
 module.exports = {
