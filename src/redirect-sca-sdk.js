@@ -7,7 +7,7 @@ const redirectSca = {};
  * @property {string} forwardUrl URL of the provider to which the user will be forwarded
  * @property {string} session Session ID that is needed by BANKSapi
  * @property {string} consent Consent ID which is needed by BANKSapi
- * @property {bool} sessionStorageFilled Boolean value that represents if the state is kept in SessionStorage
+ * @property {boolean} sessionStorageFilled Boolean value that represents if the state is kept in SessionStorage
  */
 
 /**
@@ -15,7 +15,7 @@ const redirectSca = {};
  * respectively. It needs to be called before any other method. 
  * Pollutes the sessionStorage namespace beginning with "sca:".
  * @param {string} baseUrl can either be https://test.banksapi.io or https://banksapi.io
- * @returns {State} returns resolved promise with state as soon as application state has been initialized
+ * @returns {Promise<State>} returns resolved promise with state as soon as application state has been initialized
  */
 function initState(baseUrl) {
     return helper.initState(baseUrl).then(state => {
@@ -27,7 +27,7 @@ function initState(baseUrl) {
 
 /**
  * Optional helper method, that returns the direction of the next redirection. No side effects.
- * @returns {Promise<string>} indicating next direction for redirect, can either be "PROVIDER"
+ * @returns {Promise<'PROVIDER'|'CUSTOMER'>} indicating next direction for redirect, can either be "PROVIDER"
  * or "CUSTOMER"
  */
 function returnNextRedirect() {
@@ -62,7 +62,7 @@ function continueRedirect() {
  * Aborts the redirect SCA process. If possible the authentication will be aborted and
  * the user is being redirected to the tenant with an 'redirect-sca-error' query parameter.
  * Otherwise the promise will be rejected.
- * @returns {Promise} rejected if no callback could be performed
+ * @returns {Promise<Response>} rejected if no callback could be performed
  */
 function abortSca() {
     return helper.abortSca();
