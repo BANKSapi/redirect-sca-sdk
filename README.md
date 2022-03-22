@@ -13,7 +13,7 @@ or
 
 ## Usage
 The SDK (in this case more of a library) provides you with these methods.
-* `redirectSca.initState(baseUrl)`
+* `redirectSca.initState()`
 * `redirectSca.returnNextRedirect()`
 * `redirectSca.continueRedirect()`
 * `redirectSca.abortSca()`
@@ -25,8 +25,7 @@ You can learn more about them by looking into the documentation inside of `src/r
 
 Minimal example usage after embedding the SDK from `dist/` in a `<script>`-tag:
 ```js
-const baseUrl = 'https://test.banksapi.io';
-await redirectSca.initState(baseUrl);
+await redirectSca.initState();
 let nextRedirectDirection = await redirectSca.returnNextRedirect(); // CUSTOMER or PROVIDER
 console.log(nextRedirectDirection);
 redirectSca.continueRedirect();
