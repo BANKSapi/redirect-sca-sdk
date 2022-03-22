@@ -1,14 +1,13 @@
 const QUERY_PARAM_REDIRECT_SCA_ERROR = 'redirect-sca-error';
 
-function initState(baseUrl) {
+function initState() {
     const urlParams = new URLSearchParams(window.location.search);
 
     const callbackUrl = urlParams.get('callbackUrl');
     const forwardUrl = urlParams.get('forwardUrl');
-    const session = urlParams.get('session');
-    const consent = urlParams.get('consent');
+    const sessionUrl = urlParams.get('sessionUrl');
 
-    const queryParamsFilled = callbackUrl && forwardUrl && session && consent;
+    const queryParamsFilled = callbackUrl && forwardUrl && sessionUrl;
     if (queryParamsFilled) {
         clearStorage();
     }
@@ -19,41 +18,36 @@ function initState(baseUrl) {
 
     const sessionStorageFilled = isSessionStorageFilled();
     return new Promise((resolve, reject) => {
-        if (!baseUrl) {
-            reject(new Error('missing base url'));
-        } else if (!sessionStorageFilled && !queryParamsFilled) {
+        if (!sessionStorageFilled && !queryParamsFilled) {
             reject(new Error('state could not be initialized'));
         } else if (!sessionStorageFilled) {
             if (!callbackUrl) {
                 reject(new Error('missing callbackUrl parameter'));
             } else if (!forwardUrl) {
                 reject(new Error('missing forwardUrl parameter'));
-            } else if (!session) {
-                reject(new Error('missing session parameter'));
-            } else if (!consent) {
-                reject(new Error('missing consent parameter'));
+            } else if (!sessionUrl) {
+                reject(new Error('missing sessionUrl parameter'));
             }
         }
         resolve({
             callbackUrl: callbackUrl,
             forwardUrl: forwardUrl,
-            session: session,
-            consent: consent,
+            sessionUrl: sessionUrl,
             sessionStorageFilled: sessionStorageFilled,
         });
     });
 }
 
-function continueToProvider(baseUrl, state) {
+function continueToProvider(state) {
     if (!state ||
-        !state.session ||
-        !state.callbackUrl ||
-        !state.consent) {
+        !state.sessionUrl ||
+        !state.forwardUrl ||
+        !state.callbackUrl) {
         return Promise.reject(new Error('state not initialized'));
     }
 
     // get_session -> confirm_redirect -> redirect to provider
-    return fetch(`${baseUrl}/redirect-sca/sessions/${state.session}`)
+    return fetch(state.sessionUrl)
         .then(response => {
             if (response.status >= 400) {
                 throw new Error(`HTTP ${response.status} can not be handled`);
@@ -63,32 +57,26 @@ function continueToProvider(baseUrl, state) {
         .then(response => response.json())
         .then(response => {
             const userToken = response.userToken;
-            const account = response.accountId;
-            const transfer = response.transferId;
             const correlationId = response.correlationId;
+            const confirmRedirectUrl = response.confirmRedirectUrl;
+            const authenticateRedirectUrl = response.authenticateRedirectUrl;
 
-            if (!userToken) {
-                throw new Error('could not determine userToken');
-            }
-
-            if (!account && !transfer) {
-                throw new Error('could not determine account or transfer');
+            if (!confirmRedirectUrl) {
+                throw new Error('could not find confirmRedirectUrl');
             }
 
-            if (account) {
-                sessionStorage.setItem('sca:account', account);
+            if (!authenticateRedirectUrl) {
+                throw new Error('could not find authenticateRedirectUrl');
             }
-            if (transfer) {
-                sessionStorage.setItem('sca:transfer', transfer);
-            }
+
+            sessionStorage.setItem('sca:confirmRedirectUrl', confirmRedirectUrl);
+            sessionStorage.setItem('sca:authenticateRedirectUrl', authenticateRedirectUrl);
             sessionStorage.setItem('sca:callbackUrl', state.callbackUrl);
             sessionStorage.setItem('sca:userToken', userToken);
-            sessionStorage.setItem('sca:consent', state.consent);
             sessionStorage.setItem('sca:correlationId', correlationId);
             sessionStorage.setItem('sca:time', new Date().toISOString());
 
-            let isTransfer = !!(!account && transfer);
-            return confirmRedirect(baseUrl, userToken, isTransfer, state.consent, correlationId)
+            return confirmRedirect(userToken, confirmRedirectUrl, correlationId)
                 .then(() => {
                     window.location.replace(state.forwardUrl);
                     return state.forwardUrl;
@@ -96,18 +84,14 @@ function continueToProvider(baseUrl, state) {
         });
 }
 
-function continueToCustomer(baseUrl, redirectFn = defaultRedirectToCustomerFn) {
+function continueToCustomer(redirectFn = defaultRedirectToCustomerFn) {
     let callbackUrl = sessionStorage.getItem('sca:callbackUrl');
     let userToken = sessionStorage.getItem('sca:userToken');
-    let account = sessionStorage.getItem('sca:account');
-    let transfer = sessionStorage.getItem('sca:transfer');
-    let consent = sessionStorage.getItem('sca:consent');
+    let authenticateRedirectUrl = sessionStorage.getItem('sca:authenticateRedirectUrl');
     let correlationId = sessionStorage.getItem('sca:correlationId');
-
     let redirectScaError = evaluateUrlForErrors(window.location.href);
-    let isTransfer = !!(!account && transfer);
 
-    return authenticate(baseUrl, userToken, isTransfer, consent, correlationId)
+    return authenticate(userToken, authenticateRedirectUrl, correlationId)
         .then(() => {
             clearStorage();
             return redirectFn(callbackUrl, { redirectScaError });
@@ -125,15 +109,8 @@ function defaultRedirectToCustomerFn(callbackUrl, { redirectScaError }) {
     return callbackUrl;
 }
 
-function confirmRedirect(baseUrl, userToken, isTransfer, consent, correlationId) {
-    let url;
-    if (isTransfer) {
-        url = `${baseUrl}/redirect-sca/ueberweisung/${consent}/consent/redirect`;
-    } else {
-        let account = sessionStorage.getItem('sca:account');
-        url = `${baseUrl}/redirect-sca/bankzugaenge/${account}/consent/${consent}/redirect`;
-    }
-    return fetch(url, {
+function confirmRedirect(userToken, confirmRedirectUrl, correlationId) {
+    return fetch(confirmRedirectUrl, {
         method: 'POST',
         headers: {
             'Content-Type': 'application/json',
@@ -149,17 +126,9 @@ function confirmRedirect(baseUrl, userToken, isTransfer, consent, correlationId)
     });
 }
 
-function authenticate(baseUrl, userToken, isTransfer, consent, correlationId) {
+function authenticate(userToken, authenticateRedirectUrl, correlationId) {
     let payload = window.location.search;
-
-    if (isTransfer) {
-        url = `${baseUrl}/redirect-sca/ueberweisung/${consent}/consent`;
-    } else {
-        let account = sessionStorage.getItem('sca:account');
-        url = `${baseUrl}/redirect-sca/bankzugaenge/${account}/consent/${consent}`;
-    }
-
-    return fetch(url, {
+    return fetch(authenticateRedirectUrl, {
         method: 'POST',
         headers: {
             'Content-Type': 'application/json',
@@ -182,13 +151,9 @@ function abortSca() {
     if (isSessionStorageFilled()) {
         let callbackUrl = sessionStorage.getItem('sca:callbackUrl');
         let userToken = sessionStorage.getItem('sca:userToken');
-        let account = sessionStorage.getItem('sca:account');
-        let transfer = sessionStorage.getItem('sca:transfer');
-        let consent = sessionStorage.getItem('sca:consent');
         let correlationId = sessionStorage.getItem('sca:correlationId');
-
-        let isTransfer = !!(!account && transfer);
-        return authenticate(baseUrl, userToken, isTransfer, consent, correlationId)
+        let authenticateRedirectUrl = sessionStorage.getItem('sca:authenticateRedirectUrl');
+        return authenticate(userToken, authenticateRedirectUrl, correlationId)
             .finally(() => {
                 clearStorage();
                 let url = new URL(callbackUrl);
@@ -203,10 +168,10 @@ function abortSca() {
 function isSessionStorageFilled() {
     return !!(sessionStorage.getItem('sca:callbackUrl') &&
         sessionStorage.getItem('sca:userToken') &&
-        sessionStorage.getItem('sca:consent') &&
         sessionStorage.getItem('sca:correlationId') &&
         sessionStorage.getItem('sca:time') &&
-        (sessionStorage.getItem('sca:account') || sessionStorage.getItem('sca:transfer')));
+        sessionStorage.getItem('sca:confirmRedirectUrl') &&
+        sessionStorage.getItem('sca:authenticateRedirectUrl'));
 }
 
 function evaluateUrlForErrors(urlString) {

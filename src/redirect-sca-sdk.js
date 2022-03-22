@@ -5,8 +5,7 @@ const redirectSca = {};
  * @typedef State
  * @property {string} callbackUrl URL given by the tenant (customer) which the user will be directed towards when authentication completes
  * @property {string} forwardUrl URL of the provider to which the user will be forwarded
- * @property {string} session Session ID that is needed by BANKSapi
- * @property {string} consent Consent ID which is needed by BANKSapi
+ * @property {string} sessionUrl URL that is needed by BANKSapi to retrieve a session with further information
  * @property {bool} sessionStorageFilled Boolean value that represents if the state is kept in SessionStorage
  */
 
@@ -25,14 +24,12 @@ const redirectSca = {};
 /**
  * Initializes the state by reading the query parameters or the sessionStorage
  * respectively. It needs to be called before any other method. 
- * Pollutes the sessionStorage namespace beginning with "sca:".
- * @param {string} baseUrl can either be https://test.banksapi.io or https://banksapi.io
+ * Pollutes the sessionStorage namespace with the prefix "sca:".
  * @returns {State} returns resolved promise with state as soon as application state has been initialized
  */
-function initState(baseUrl) {
-    return helper.initState(baseUrl).then(state => {
+function initState() {
+    return helper.initState().then(state => {
         redirectSca.state = state;
-        redirectSca.baseUrl = baseUrl;
         return redirectSca.state;
     });
 }
@@ -66,9 +63,9 @@ function continueRedirect(doRedirectToCustomer) {
     return returnNextRedirect().then(continueTo => {
         switch (continueTo) {
             case 'PROVIDER':
-                return helper.continueToProvider(redirectSca.baseUrl, redirectSca.state);
+                return helper.continueToProvider(redirectSca.state);
             case 'CUSTOMER':
-                return helper.continueToCustomer(redirectSca.baseUrl, doRedirectToCustomer);
+                return helper.continueToCustomer(doRedirectToCustomer);
         }
     });
 }
