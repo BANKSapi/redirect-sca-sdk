@@ -17,7 +17,10 @@ module.exports = {
   output: {
     path: path.resolve(__dirname, './dist'),
     filename: 'redirect-sca-sdk.js',
-    library: 'redirectSca',
+    library: {
+        name: 'redirectSca',
+        type: 'umd',
+    },
     clean: true
   },
   devServer: {
