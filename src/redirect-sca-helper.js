@@ -172,15 +172,17 @@ function isSessionStorageFilled() {
 
 function evaluateUrlForErrors(urlString) {
     let url = new URL(urlString);
-    let errorValue;
-    if (url.searchParams.has('error_uri')) {
-        errorValue = 'Fehler bei Kundenauthentifizierung';
-    } else if (url.searchParams.has('error')) {
-        errorValue = url.searchParams.get('error');
-    } else if (url.searchParams.has('error_description')) {
-        errorValue = url.searchParams.get('error_description');
+
+    let errorDescription = Array.from(url.searchParams.entries())
+        .filter(([key, value]) => (key == 'error' || key == 'error_description') && value)
+        .map(([, value]) => window.decodeURI(value))
+        .join(',')
+
+    if (!errorDescription && url.searchParams.has('error_uri')) {
+        errorDescription = 'Fehler bei Kundenauthentifizierung';
     }
-    return errorValue;
+
+    return errorDescription;
 }
 
 function clearStateIfTooOld() {
