@@ -1,6 +1,6 @@
 const QUERY_PARAM_REDIRECT_SCA_ERROR = 'redirect-sca-error';
 
-const initState = function () {
+function initState() {
     const urlParams = new URLSearchParams(window.location.search);
 
     const callbackUrl = urlParams.get('callbackUrl');
@@ -9,7 +9,7 @@ const initState = function () {
 
     const queryParamsFilled = callbackUrl && forwardUrl && sessionUrl;
     if (queryParamsFilled) {
-        sessionStorage.clear();
+        clearStorage();
     }
 
     if (isSessionStorageFilled()) {
@@ -19,7 +19,7 @@ const initState = function () {
     const sessionStorageFilled = isSessionStorageFilled();
     return new Promise((resolve, reject) => {
         if (!sessionStorageFilled && !queryParamsFilled) {
-            reject(new Error('state could not be initialized'))
+            reject(new Error('state could not be initialized'));
         } else if (!sessionStorageFilled) {
             if (!callbackUrl) {
                 reject(new Error('missing callbackUrl parameter'));
@@ -35,7 +35,7 @@ const initState = function () {
             sessionUrl: sessionUrl,
             sessionStorageFilled: sessionStorageFilled,
         });
-    })
+    });
 }
 
 function continueToProvider(state) {
@@ -52,7 +52,7 @@ function continueToProvider(state) {
             if (response.status >= 400) {
                 throw new Error(`HTTP ${response.status} can not be handled`);
             }
-            return Promise.resolve(response);
+            return response;
         })
         .then(response => response.json())
         .then(response => {
@@ -62,11 +62,11 @@ function continueToProvider(state) {
             const authenticateRedirectUrl = response.authenticateRedirectUrl;
 
             if (!confirmRedirectUrl) {
-                return Promise.reject(new Error('could not find confirmRedirectUrl'));
+                throw new Error('could not find confirmRedirectUrl');
             }
 
             if (!authenticateRedirectUrl) {
-                return Promise.reject(new Error('could not find authenticateRedirectUrl'));
+                throw new Error('could not find authenticateRedirectUrl');
             }
 
             sessionStorage.setItem('sca:confirmRedirectUrl', confirmRedirectUrl);
@@ -84,25 +84,29 @@ function continueToProvider(state) {
         });
 }
 
-function continueToCustomer() {
+function continueToCustomer(redirectFn = defaultRedirectToCustomerFn) {
     let callbackUrl = sessionStorage.getItem('sca:callbackUrl');
     let userToken = sessionStorage.getItem('sca:userToken');
     let authenticateRedirectUrl = sessionStorage.getItem('sca:authenticateRedirectUrl');
     let correlationId = sessionStorage.getItem('sca:correlationId');
-
-    let errorValue = evaluateUrlForErrors(window.location.href);
-    if (errorValue) {
-        let url = new URL(callbackUrl);
-        url.searchParams.set(QUERY_PARAM_REDIRECT_SCA_ERROR, errorValue);
-        callbackUrl = url.toString();
-    }
+    let redirectScaError = evaluateUrlForErrors(window.location.href);
 
     return authenticate(userToken, authenticateRedirectUrl, correlationId)
         .then(() => {
-            sessionStorage.clear();
-            window.location.replace(callbackUrl);
-            return callbackUrl;
+            clearStorage();
+            return redirectFn(callbackUrl, { redirectScaError });
         });
+}
+
+function defaultRedirectToCustomerFn(callbackUrl, { redirectScaError }) {
+    if (redirectScaError) {
+        let url = new URL(callbackUrl);
+        url.searchParams.set(QUERY_PARAM_REDIRECT_SCA_ERROR, redirectScaError);
+        callbackUrl = url.toString();
+    }
+
+    window.location.replace(callbackUrl);
+    return callbackUrl;
 }
 
 function confirmRedirect(userToken, confirmRedirectUrl, correlationId) {
@@ -118,7 +122,7 @@ function confirmRedirect(userToken, confirmRedirectUrl, correlationId) {
         if (response.status >= 400) {
             throw new Error(`HTTP ${response.status} can not be handled`);
         }
-        return Promise.resolve(response);
+        return response;
     });
 }
 
@@ -139,7 +143,7 @@ function authenticate(userToken, authenticateRedirectUrl, correlationId) {
         if (response.status >= 400) {
             throw new Error(`HTTP ${response.status} can not be handled`);
         }
-        return Promise.resolve(response);
+        return response;
     });
 }
 
@@ -149,9 +153,9 @@ function abortSca() {
         let userToken = sessionStorage.getItem('sca:userToken');
         let correlationId = sessionStorage.getItem('sca:correlationId');
         let authenticateRedirectUrl = sessionStorage.getItem('sca:authenticateRedirectUrl');
-        authenticate(userToken, authenticateRedirectUrl, correlationId)
+        return authenticate(userToken, authenticateRedirectUrl, correlationId)
             .finally(() => {
-                sessionStorage.clear();
+                clearStorage();
                 let url = new URL(callbackUrl);
                 url.searchParams.set(QUERY_PARAM_REDIRECT_SCA_ERROR, 'user abort');
                 window.location.replace(url);
@@ -191,8 +195,14 @@ function clearStateIfTooOld() {
     let difference = Math.abs(endTime.getTime() - startTime.getTime());
     let minutes = Math.round(difference / 60000);
     if (minutes > 15) {
-        sessionStorage.clear();
+        clearStorage();
     }
+}
+
+function clearStorage() {
+    Object.keys(sessionStorage)
+        .filter(key => key.startsWith('sca:'))
+        .forEach(key => sessionStorage.removeItem(key));
 }
 
 module.exports = {
